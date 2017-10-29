@@ -22,15 +22,15 @@ var (
 	data        map[string]string
 	garagedoors map[string]string
 	server      = "tcp://rickbliss.strangled.net:30845"
-
-	qos       = 0
-	retained  = false
-	clientid  = "gopublisher"
-	username  = ""
-	password  = ""
-	connOpts  = MQTT.NewClientOptions().AddBroker(server).SetClientID(clientid).SetCleanSession(true)
-	tlsConfig = &tls.Config{InsecureSkipVerify: true, ClientAuth: tls.NoClientCert}
-	client    = MQTT.NewClient(connOpts)
+	keepAlive   = 5 * time.Second
+	qos         = 0
+	retained    = false
+	clientid    = "gopublisher"
+	username    = ""
+	password    = ""
+	connOpts    = MQTT.NewClientOptions().AddBroker(server).SetClientID(clientid).SetCleanSession(true)
+	tlsConfig   = &tls.Config{InsecureSkipVerify: true, ClientAuth: tls.NoClientCert}
+	client      = MQTT.NewClient(connOpts)
 )
 
 //Pub for GDS
@@ -96,6 +96,9 @@ func main() {
 	//MQTT STUFF
 	topic := "#"
 	connOpts.AddBroker(server)
+
+	connOpts.KeepAlive = 10
+
 	connOpts.OnConnect = func(c MQTT.Client) {
 		if token := c.Subscribe(topic, byte(qos), onMessageReceived); token.Wait() && token.Error() != nil {
 			//panic(token.Error())
