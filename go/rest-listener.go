@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -24,61 +21,64 @@ var (
 	addr        = flag.String("addr", ":8080", "http service address")
 	data        map[string]string
 	garagedoors map[string]string
+	server      = "tcp://rickbliss.strangled.net:30845"
+
+	qos       = 0
+	retained  = false
+	clientid  = "gopublisher"
+	username  = ""
+	password  = ""
+	connOpts  = MQTT.NewClientOptions().AddBroker(server).SetClientID(clientid).SetCleanSession(true)
+	tlsConfig = &tls.Config{InsecureSkipVerify: true, ClientAuth: tls.NoClientCert}
+	client    = MQTT.NewClient(connOpts)
 )
 
 //Pub for GDS
 func getgds() {
 	//Set gdmap to empty
 	garagedoors = map[string]string{}
+
+	fmt.Println(len(garagedoors))
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		//panic(token.Error())
+		fmt.Println("alreadyconn")
+	} else {
+		fmt.Printf("Connected to %s\n", server)
+	}
+	//pubmqtt("home/garage/doors", "gds")
+	client.Publish("home/garage/doors", byte(qos), retained, "gds")
+	fmt.Println("After Publish 1")
+	for len(garagedoors) != 2 {
+		//pubmqtt("home/garage/doors", "gds")
+		if token := client.Connect(); token.Wait() && token.Error() != nil {
+			//panic(token.Error())
+			fmt.Println("alreadyconn")
+			client.Publish("home/garage/doors", byte(qos), retained, "gds")
+		} else {
+			fmt.Printf("Connected to %s\n", server)
+		}
+		client.Publish("home/garage/doors", byte(qos), retained, "gds")
+		fmt.Println("After Publish 2")
+		time.Sleep(100 * time.Millisecond)
+
+	}
+
+}
+
+func pubmqtt(topic string, message string) {
 	//MQTT.DEBUG = log.New(os.Stdout, "", 0)
 	//MQTT.ERROR = log.New(os.Stdout, "", 0)
-	stdin := bufio.NewReader(os.Stdin)
-	hostname, _ := os.Hostname() . "pub"
-
-	server := flag.String("server", "tcp://127.0.0.1:1883", "The full URL of the MQTT server to connect to")
-	topic := flag.String("topic", hostname, "Topic to publish the messages on")
-	qos := flag.Int("qos", 0, "The QoS to send the messages at")
-	retained := flag.Bool("retained", false, "Are the messages sent with the retained flag")
-	clientid := flag.String("clientid", hostname+strconv.Itoa(time.Now().Second()), "A clientid for the connection")
-	username := flag.String("username", "", "A username to authenticate to the MQTT server")
-	password := flag.String("password", "", "Password to match username")
-	flag.Parse()
-
-	connOpts := MQTT.NewClientOptions().AddBroker(*server).SetClientID(*clientid).SetCleanSession(true)
-	if *username != "" {
-		connOpts.SetUsername(*username)
-		if *password != "" {
-			connOpts.SetPassword(*password)
-		}
-	}
-	tlsConfig := &tls.Config{InsecureSkipVerify: true, ClientAuth: tls.NoClientCert}
-	connOpts.SetTLSConfig(tlsConfig)
-
-	client := MQTT.NewClient(connOpts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		return
-	}
-	fmt.Printf("Connected to %s\n", *server)
-
-	for {
-		message, err := stdin.ReadString('\n')
-		if err == io.EOF {
-			os.Exit(0)
-		}
-		client.Publish(*topic, byte(*qos), *retained, message)
-	}
-	fmt.Println(len(garagedoors))
-
-	for len(garagedoors) != 2 {
-		fmt.Println("waiting for 2")
-		time.Sleep(1 * time.Second)
-		client := MQTT.NewClient(connOpts)
+		//panic(token.Error())
+		fmt.Println("alreadyconn")
+	} else {
+		fmt.Printf("Connected to %s\n", server)
 	}
 
-	//While map not > 2
-	//Pub
-	//update map
+	fmt.Println("in publish")
+
+	client.Publish("home/garage/doors", byte(qos), retained, "gds")
+	fmt.Println("after publish")
 }
 
 func main() {
@@ -94,40 +94,27 @@ func main() {
 		os.Exit(0)
 	}()
 	//MQTT STUFF
-	hostname, _ := os.Hostname()
-
-	server := flag.String("server", "tcp://rickbliss.strangled.net:30845", "The full url of the MQTT server to connect to ex: tcp://127.0.0.1:1883")
-	topic := flag.String("topic", "#", "Topic to subscribe to")
-	qos := flag.Int("qos", 0, "The QoS to subscribe to messages at")
-	clientid := flag.String("clientid", hostname+strconv.Itoa(time.Now().Second()), "A clientid for the connection")
-	username := flag.String("username", "", "A username to authenticate to the MQTT server")
-	password := flag.String("password", "", "Password to match username")
-	flag.Parse()
-
-	connOpts := &MQTT.ClientOptions{
-		ClientID:             *clientid,
-		CleanSession:         true,
-		Username:             *username,
-		Password:             *password,
-		MaxReconnectInterval: 1 * time.Second,
-		//KeepAlive:            30 * time.Second,
-		TLSConfig: tls.Config{InsecureSkipVerify: true, ClientAuth: tls.NoClientCert},
-	}
-	connOpts.AddBroker(*server)
+	topic := "#"
+	connOpts.AddBroker(server)
 	connOpts.OnConnect = func(c MQTT.Client) {
-		if token := c.Subscribe(*topic, byte(*qos), onMessageReceived); token.Wait() && token.Error() != nil {
-			panic(token.Error())
+		if token := c.Subscribe(topic, byte(qos), onMessageReceived); token.Wait() && token.Error() != nil {
+			//panic(token.Error())
+			fmt.Printf("already conn")
 		}
 
 	}
 
+	//Doing this ... not sure why
+	garagedoors = map[string]string{}
 	client := MQTT.NewClient(connOpts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		//panic(token.Error())
+		fmt.Printf("already conn")
 	} else {
-		fmt.Printf("Connected to %s\n", *server)
+		fmt.Printf("Connected to %s\n", server)
 	}
 	flag.Parse()
+	client.Publish("home/garage/doors", byte(qos), retained, "gds")
 	data = map[string]string{}
 
 	r := httprouter.New()
