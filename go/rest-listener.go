@@ -35,6 +35,8 @@ var (
 
 //Pub for GDS
 func getgds() {
+	MQTT.DEBUG = log.New(os.Stdout, "", 0)
+	MQTT.ERROR = log.New(os.Stdout, "", 0)
 	//Set gdmap to empty
 	garagedoors = map[string]string{}
 
@@ -66,8 +68,7 @@ func getgds() {
 }
 
 func pubmqtt(topic string, message string) {
-	//MQTT.DEBUG = log.New(os.Stdout, "", 0)
-	//MQTT.ERROR = log.New(os.Stdout, "", 0)
+
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		//panic(token.Error())
 		fmt.Println("alreadyconn")
