@@ -35,21 +35,12 @@ var (
 
 //Pub for GDS
 func getgds() {
+
 	MQTT.DEBUG = log.New(os.Stdout, "", 0)
 	MQTT.ERROR = log.New(os.Stdout, "", 0)
 	//Set gdmap to empty
 	garagedoors = map[string]string{}
 
-	fmt.Println(len(garagedoors))
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		//panic(token.Error())
-		fmt.Println("alreadyconn")
-	} else {
-		fmt.Printf("Connected to %s\n", server)
-	}
-	//pubmqtt("home/garage/doors", "gds")
-	client.Publish("home/garage/doors", byte(qos), retained, "gds")
-	fmt.Println("After Publish 1")
 	for len(garagedoors) != 2 {
 		//pubmqtt("home/garage/doors", "gds")
 		if token := client.Connect(); token.Wait() && token.Error() != nil {
@@ -166,12 +157,20 @@ func update(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 func onMessageReceived(client MQTT.Client, message MQTT.Message) {
 	fmt.Printf("Received message on topic: %s\nMessage: %s\n", message.Topic(), message.Payload())
+	strtopic := string(message.Topic()[:])
+	strpayload := string(message.Payload()[:])
 	if message.Topic() == "home/garage/door1" || message.Topic() == "home/garage/door2" {
 
-		strtopic := string(message.Topic()[:])
-		strpayload := string(message.Payload()[:])
-
 		garagedoors[strtopic] = strpayload
+	}
+
+	if strpayload == "FLOAT" {
+		resp, err := http.Post("https://maker.ifttt.com/trigger/garagefloat/with/key/d7zru7Ij37xHBp9X3jTBdN", "", nil)
+		if err != nil {
+			// handle err
+		}
+		defer resp.Body.Close()
+
 	}
 
 }
